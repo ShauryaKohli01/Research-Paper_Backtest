@@ -1,41 +1,3 @@
-"""
-=============================================================================
-MICROSTRUCTURE STRATEGY BACKTEST  v3.0
-"Trades, Quotes and Prices" — Bouchaud, Bonart, Donier & Gould (2018)
-Cambridge University Press
-=============================================================================
-
-KEY FIXES IN v3 (vs v2):
-──────────────────────────
-  BUG 1 FIXED: Position write-back was broken in v2 — positions were
-               computed but never correctly applied to the panel.
-               Result: NAV diverged wildly after Sep 2021. NOW FIXED.
-
-  BUG 2 FIXED: Daily return summed bar-level returns incorrectly.
-               Cross-day bar returns were not zeroed out.
-               NOW: bar-0 return = 0 each day; daily ret = Σ(390 bars).
-
-  BUG 3 FIXED: Holding-period dict mutated mid-loop causing state corruption.
-               NOW: clean two-pass (compute target → merge → apply).
-
-NEW: ANTHROPIC API INTEGRATION
-────────────────────────────────
-  After backtest completes, Claude analyses results in the language of
-  the book — citing chapters, equations, empirical findings.
-
-SIGNALS (faithful to the book):
-─────────────────────────────────
-  OFI       Ch.11 — (V_buy − V_sell) / V_total  [Eq. 11.x]
-  Hawkes    Ch.9  — ACF(|r_t|,lag=1) rolling
-  Spread    Ch.16 — Roll (1984): 2√(−Cov(Δp_t, Δp_{t-1}))
-  Kyle λ    Ch.15 — Amihud: |r| / dollar_volume
-  Impact    Ch.12 — sign × √(V/ADV)
-
-DEPENDENCIES: numpy pandas matplotlib requests
-RUN: python3 Microstructure_Backtest_TQP_Replication.py
-=============================================================================
-"""
-
 import os, warnings, time
 warnings.filterwarnings("ignore")
 
@@ -109,9 +71,6 @@ STOCK_PARAMS = {
     "TSLA":  dict(mu=0.22, sigma=0.0380, spread_bps=4.5,  jump_lam=0.018, p0=86),
 }
 
-# ═════════════════════════════════════════════════════════════════════════════
-# LAYER 1 — 1-MIN BAR GENERATOR
-# ═════════════════════════════════════════════════════════════════════════════
 
 def generate_bars(ticker, trading_days, bars_per_day, seed=0):
     np.random.seed(42 + seed)
@@ -188,10 +147,6 @@ def generate_bars(ticker, trading_days, bars_per_day, seed=0):
     return df
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# LAYER 2 — INTRADAY SIGNALS
-# ═════════════════════════════════════════════════════════════════════════════
-
 def compute_signals(bars, cfg):
     b   = bars.copy()
     Wo  = cfg["ofi_bars"]
@@ -223,10 +178,8 @@ def compute_signals(bars, cfg):
 
     return b.dropna()
 
-
-# ═════════════════════════════════════════════════════════════════════════════
 # LAYER 3 — DAILY AGGREGATION
-# ═════════════════════════════════════════════════════════════════════════════
+
 
 def aggregate_daily(b):
     grp = b.groupby("date")
@@ -245,9 +198,7 @@ def aggregate_daily(b):
     return agg.dropna()
 
 
-# ═════════════════════════════════════════════════════════════════════════════
 # COMPOSITE SCORE
-# ═════════════════════════════════════════════════════════════════════════════
 
 def build_score(panel):
     W = {"ofi": 0.35, "impact": 0.25, "hawkes": 0.15, "spread": -0.15, "kyle": -0.10}
@@ -259,10 +210,6 @@ def build_score(panel):
     p["score"] = sum(W[s] * p[f"z_{s}"] for s in W)
     return p
 
-
-# ═════════════════════════════════════════════════════════════════════════════
-# POSITION BUILDER — v3 FIXED
-# ═════════════════════════════════════════════════════════════════════════════
 
 def build_positions(panel, cfg):
     """
@@ -332,10 +279,8 @@ def build_positions(panel, cfg):
     p["position"] = p["position"].fillna(0.0)
     return p
 
-
-# ═════════════════════════════════════════════════════════════════════════════
 # BACKTEST ENGINE — v3
-# ═════════════════════════════════════════════════════════════════════════════
+
 
 def run_backtest(panel, cfg):
     """
@@ -387,10 +332,7 @@ def run_backtest(panel, cfg):
     res["cum_pnl"]= res["net_pnl"].cumsum()
     return res
 
-
-# ═════════════════════════════════════════════════════════════════════════════
 # ANALYTICS
-# ═════════════════════════════════════════════════════════════════════════════
 
 def metrics(res):
     r   = res["net_pnl"].dropna()
@@ -429,9 +371,6 @@ def stylised_facts(r):
     }
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# ANTHROPIC API
-# ═════════════════════════════════════════════════════════════════════════════
 
 def get_ai_commentary(met, sty, cfg):
     if not HAS_REQUESTS:
@@ -469,10 +408,6 @@ Write a sharp 150-word research commentary:
     except Exception as e:
         return f"[ API error: {e} ]"
 
-
-# ═════════════════════════════════════════════════════════════════════════════
-# DASHBOARD PLOT
-# ═════════════════════════════════════════════════════════════════════════════
 
 def plot_all(res, panel, met, sty, cfg, sample_bars, ai_text):
     BG, GRID = "#0d1117", "#1c2128"
@@ -685,12 +620,9 @@ def plot_all(res, panel, met, sty, cfg, sample_bars, ai_text):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     out        = os.path.join(script_dir, "Microstructure_Backtest_Results.png")
     plt.savefig(out, dpi=160, bbox_inches="tight", facecolor=BG)
-    print(f"  ✅ Saved → {out}")
+    print(f"   Saved → {out}")
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-# MAIN
-# ═════════════════════════════════════════════════════════════════════════════
 
 def main():
     cfg          = CONFIG
